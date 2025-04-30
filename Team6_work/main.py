@@ -2,7 +2,7 @@ from fastapi import FastAPI, Request
 from openai import OpenAI
 import os
 
-client = OpenAI(api_key="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")  # ← Replace with your key
+client = OpenAI(api_key="")  # ← Replace with your key
 
 app = FastAPI()
 
