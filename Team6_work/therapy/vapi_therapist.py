@@ -1,6 +1,16 @@
 from vapi_python import Vapi
 
-vapi = Vapi(api_key='c524cc97-ece6-4fcd-a045-ddfec239fcb6')
-vapi.start(assistant_id='7e34bfbd-5fdd-4aef-9a3b-17b3e29f9bf4')
+vapi = Vapi(api_key='6aa03be6-329f-44e6-b777-33df6a7605fa')
+
+assistant_overrides = {
+    "recordingEnabled": False,
+    "variableValues": {
+        "name": "Alex",
+        "likes": "apple juice, hates all other types of juice"
+    }
+}
+
+
+vapi.start(assistant_id='ba05d6d9-8f92-4065-b88b-ecef1ea39d69', assistant_overrides=assistant_overrides)
 
 
