@@ -7,7 +7,7 @@ load_dotenv()  # This loads .env from the current directory
 openai_api_key = os.getenv("OPENAI_API_KEY")
 
 
-client = OpenAI(api_key="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")  # ← Replace with your key
+client = OpenAI(api_key="")  # ← Replace with your key
 
 app = FastAPI()
 

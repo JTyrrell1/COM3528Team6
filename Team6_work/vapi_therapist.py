@@ -4,7 +4,7 @@ from Team6_work.client_sdk_python_main.vapi_python.vapi_python import Vapi      
 
 class Vapi_TheRapist:
     def __init__(self, image_description, patient_history):
-        api_key = "6aa03be6-329f-44e6-b777-33df6a7605fa"
+        api_key = ""
 
         # Initialise Vapi client
         self.assistant = Vapi(api_key=api_key)
