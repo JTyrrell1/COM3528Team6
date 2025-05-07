@@ -1,8 +1,13 @@
 from fastapi import FastAPI, Request
 from openai import OpenAI
 import os
+from dotenv import load_dotenv
 
-client = OpenAI(api_key="")  # ← Replace with your key
+load_dotenv()  # This loads .env from the current directory
+openai_api_key = os.getenv("OPENAI_API_KEY")
+
+
+client = OpenAI(api_key="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")  # ← Replace with your key
 
 app = FastAPI()
 
@@ -24,6 +29,9 @@ def detect_emotion_from_text(text: str) -> str:
     except Exception as e:
         print("OpenAI Error:", e)
         return "unknown"
+
+# it checks not jsut after every prompt but all the time ? -> maybe we can force when the new promt in text ( from msg.get("content", "") ) changes ? 
+# or even on a time delay - so check every 10 seconds and if it changes then change emotion response but seems less real ? 
 
 @app.post("/vapi-webhook")
 async def vapi_webhook(request: Request):
