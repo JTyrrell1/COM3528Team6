@@ -19,7 +19,7 @@ class SimpleFacerec:
         for img_path in images_path:
             img = cv2.imread(img_path)
             if img is None:
-                continue  # Skip files that aren't valid images
+                continue  # Skip invalid images
             rgb_img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
             encodings = face_recognition.face_encodings(rgb_img)
             if encodings:
@@ -36,15 +36,22 @@ class SimpleFacerec:
         face_encodings = face_recognition.face_encodings(rgb_small_frame, face_locations)
         face_names = []
         self.recognise = 0
+
         for face_encoding in face_encodings:
             matches = face_recognition.compare_faces(self.known_face_encodings, face_encoding)
             face_distances = face_recognition.face_distance(self.known_face_encodings, face_encoding)
-            best_match_index = np.argmin(face_distances)
-            if matches[best_match_index]:
-                name = self.known_face_names[best_match_index]
-                self.recognise = 1
-            else:
+
+            if len(face_distances) == 0:
                 name = "Unknown"
+            else:
+                best_match_index = np.argmin(face_distances)
+                if matches[best_match_index]:
+                    name = self.known_face_names[best_match_index]
+                    self.recognise = 1
+                else:
+                    name = "Unknown"
+
             face_names.append(name)
+
         face_locations = np.array(face_locations) / self.frame_resizing
         return face_locations.astype(int), face_names, self.recognise

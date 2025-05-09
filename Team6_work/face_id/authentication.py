@@ -1,20 +1,18 @@
-# authentication.py
-# source for faceID: https://www.youtube.com/watch?v=
-
 import cv2
-from face_id.simple_facerec import SimpleFacerec
-import shutil
 import os
 import time
+from Team6_work.face_id.simple_facerec import SimpleFacerec
 
-# Initialize the SimpleFacerec object globally
-sfr = SimpleFacerec()
-sfr.load_encoding_images("face_id/images/")
+def authenticate(callback=None):
+    sfr = SimpleFacerec()
+    sfr.load_encoding_images("Team6_work/face_id/images/")
 
-def authenticate(callback):
-    global sfr
     cap = cv2.VideoCapture(0)
-    is_recognised = 0 
+
+    attempt_counter = 0
+    recognised_counter = 0
+    recognised_name = None
+    consistent_threshold = 5
 
     while True:
         ret, frame = cap.read()
@@ -22,36 +20,54 @@ def authenticate(callback):
             print("Failed to grab frame")
             break
 
+        attempt_counter += 1
+        print(f"Attempt {attempt_counter}: ", end="")
+
         face_locations, face_names, is_recognised = sfr.detect_known_faces(frame)
-        for face_loc, name in zip(face_locations, face_names):
-            y1, x2, y2, x1 = face_loc
-            cv2.putText(frame, name, (x1, y1 - 10), cv2.FONT_HERSHEY_DUPLEX, 1, (0, 0, 200), 2)
-            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 200), 4)
-                
+        print(f"Found {len(face_locations)} face(s)")
+
+        for (top, right, bottom, left), name in zip(face_locations, face_names):
             if name != "Unknown":
-                break  # Recognised the person
+                print(f"Recognised: {name}")
+                if name == recognised_name:
+                    recognised_counter += 1
+                else:
+                    recognised_name = name
+                    recognised_counter = 1
 
-        cv2.imshow("Frame", frame)
-        cv2.waitKey(1)
+                if recognised_counter >= consistent_threshold:
+                    print("Confirmed identity:", name)
+                    cv2.putText(frame, f"{name}", (left, top - 10),
+                                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                    cv2.rectangle(frame, (left, top), (right, bottom), (0, 255, 0), 2)
+                    cv2.imshow("Face ID Authentication", frame)
+                    if callback:
+                        callback(name)
+                    time.sleep(5)
+                    cap.release()
+                    cv2.destroyAllWindows()
+                    return
+            else:
+                print("Unrecognised")
 
-        if is_recognised == 1:
-            time.sleep(5)  # Keep frame open for 2 more seconds after recognition
+            # Draw red box regardless
+            cv2.putText(frame, f"{name}", (left, top - 10),
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+            cv2.rectangle(frame, (left, top), (right, bottom), (0, 0, 255), 2)
+
+        cv2.imshow("Face ID Authentication", frame)
+
+        if cv2.waitKey(1) == ord('q') or attempt_counter >= 100:
+            print("Face not recognised or something went wrong.")
             break
 
     cap.release()
-    cv2.destroyWindow("Frame")
-    callback(is_recognised)
+    cv2.destroyAllWindows()
 
-def add_face_id(image_path):
-    # Copy the image to the directory
-    destination = "face_id/images/" + os.path.basename(image_path)
-    shutil.copy(image_path, destination)
+def my_callback(name):
+    print("Face recognised!")
+    # You can call your MIRO function here
+    # launch_reminiscence(name)
 
-    # Reload the images to include the new face ID
-    global sfr
-    sfr.load_encoding_images("face_id/images/")
 if __name__ == "__main__":
-    def my_callback(is_recognised):
-        print("Face recognised!" if is_recognised else "Face not recognised or something went wrong.")
-
     authenticate(my_callback)

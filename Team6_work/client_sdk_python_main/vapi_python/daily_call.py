@@ -6,7 +6,7 @@ import os
 
 SAMPLE_RATE = 16000
 NUM_CHANNELS = 1
-CHUNK_SIZE = 2048
+CHUNK_SIZE = 640     
 
 
 def is_playable_speaker(participant):
