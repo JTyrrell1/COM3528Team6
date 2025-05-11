@@ -1,6 +1,6 @@
 import threading
 import tkinter as tk
-from shared_state import AppState
+from Team6_work.bringing_together.shared_state import AppState
 from Team6_work.start_screen import ReminiscenceTherapyGUI
 from Team6_work.miro_emotions import miro_emotion_loop
 

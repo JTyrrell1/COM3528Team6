@@ -14,7 +14,7 @@ from std_msgs.msg import Float32MultiArray, UInt32MultiArray, UInt16MultiArray
 from sensor_msgs.msg import JointState
 from geometry_msgs.msg import TwistStamped
 import miro2 as miro
-from shared_state import AppState  # NEW
+from Team6_work.bringing_together.shared_state import AppState  # NEW
 
 # Joint indices
 droop, wag, left_eye, right_eye, left_ear, right_ear = range(6)
