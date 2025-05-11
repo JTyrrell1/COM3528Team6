@@ -13,6 +13,11 @@ from Team6_work.vapi_therapist import Vapi_TheRapist
 from Team6_work.final.main import create_app  # <-- app factory
 from Team6_work.final.miro_emotions import run_miro  # <-- make sure this uses run_miro(shared_state)
 
+def run_vapi_in_process(image_description, patient_history):
+    from Team6_work.vapi_therapist import Vapi_TheRapist
+    vapi = Vapi_TheRapist(image_description, patient_history)
+    vapi.create_and_start_assistant()
+
 class ReminiscenceTherapyGUI(ttk.Frame):
     def __init__(self, root, patient_info, theme_path="Team6_work/Azure-ttk-theme-main/azure.tcl"):
         super().__init__(root, padding=20)
@@ -52,9 +57,10 @@ class ReminiscenceTherapyGUI(ttk.Frame):
             self._preview_pdf(self.history_file_path)
             self.history_text = self._extract_text_from_pdf(self.history_file_path)
 
-        self.vapi_therapist = None
+        self.vapi_proc = None
         self.api_proc = None
         self.miro_proc = None
+
 
     def _build_image_panel(self):
         panel = ttk.LabelFrame(self, text="Reminiscence Image", padding=12)
@@ -137,6 +143,16 @@ class ReminiscenceTherapyGUI(ttk.Frame):
         text = doc[0].get_text()
         doc.close()
         return text.strip()
+    
+    def _show_therapy_view(self):
+        self.pack_forget()
+        self.therapy_frame = TherapySessionFrame(self.root, self.patient_name, self.shared_state, self._return_to_main_view)
+        self.therapy_frame.pack(fill="both", expand=True)
+
+    def _return_to_main_view(self):
+        self._end_all_processes()  # ← Kill subprocesses
+        self.therapy_frame.pack_forget()
+        self.pack(fill="both", expand=True)
 
     def _show_url_dialog(self, url):
         window = tk.Toplevel(self)
@@ -178,16 +194,17 @@ class ReminiscenceTherapyGUI(ttk.Frame):
             # Start FastAPI via uvicorn.run
             from uvicorn import run
             app = create_app(self.shared_state)
-            self.api_proc = Process(target=run, kwargs={"app": app, "host": "0.0.0.0", "port": 8000})
+            self.api_proc = Process(target=run, kwargs={"app": app, "host": "0.0.0.0", "port": 8000}, daemon=True)
             self.api_proc.start()
 
             # Start ngrok via subprocess
-            subprocess.Popen([
+            self.ngrok_proc = subprocess.Popen([
                 "bash", "-c", "cd ~ && ./ngrok http --domain=eminent-sought-beetle.ngrok-free.app 8000"
             ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
+
             # Start MiRo behavior process
-            self.miro_proc = Process(target=run_miro, args=(self.shared_state,))
+            self.miro_proc = Process(target=run_miro, args=(self.shared_state,), daemon=True)
             self.miro_proc.start()
 
             time.sleep(2)
@@ -200,15 +217,119 @@ class ReminiscenceTherapyGUI(ttk.Frame):
         image_description = self.image_description_widget.get("1.0", "end").strip()
 
         if image_description and self.history_text:
-            self.vapi_therapist = Vapi_TheRapist(
-                image_description=image_description,
-                patient_history=self.history_text
+            self.vapi_proc = Process(
+                target=run_vapi_in_process,
+                args=(image_description, self.history_text),
+                daemon=True
             )
-            self.vapi_therapist.create_and_start_assistant()
-            messagebox.showinfo("Therapy Started", "Therapy has started. Check console for details.")
+            self.vapi_proc.start()
+            self._show_therapy_view()
         else:
             messagebox.showwarning("Missing Information", "Please upload both an image and a history PDF before starting.")
 
+    def _end_all_processes(self):
+        print("[MainGUI] Cleaning up processes...")
+
+        # vapi
+        if self.vapi_proc and self.vapi_proc.is_alive():
+            self.vapi_proc.terminate()
+            self.vapi_proc.join()
+            print("[MainGUI] Vapi process terminated.")
+
+        # FastAPI
+        if self.api_proc and self.api_proc.is_alive():
+            self.api_proc.terminate()
+            self.api_proc.join()
+            print("[MainGUI] FastAPI terminated.")
+
+        # MiRo
+        if self.miro_proc and self.miro_proc.is_alive():
+            self.miro_proc.terminate()
+            self.miro_proc.join()
+            print("[MainGUI] MiRo process terminated.")
+
+        # ngrok
+        if hasattr(self, 'ngrok_proc') and self.ngrok_proc and self.ngrok_proc.poll() is None:
+            self.ngrok_proc.terminate()
+            print("[MainGUI] ngrok terminated.")
+
+    def _on_app_exit(self):
+        self._end_all_processes()
+        self.root.quit()       # Ensure the mainloop exits
+        self.root.destroy()    # Cleanly destroy GUI
+
+
+
+
+
+
+class TherapySessionFrame(ttk.Frame):
+    def __init__(self, parent, patient_name, shared_state, end_session_callback):
+        super().__init__(parent, padding=40)
+        self.root = parent  # Required to bind correctly
+        self.shared_state = shared_state
+        self.end_session_callback = end_session_callback
+        self.start_time = time.time()
+
+        # Bind key events globally (safer than per-widget)
+        self.root.bind_all("<KeyPress-t>", self._start_listening_mode)
+        self.root.bind_all("<KeyRelease-t>", self._stop_listening_mode)
+
+        # Title
+        ttk.Label(self, text=f"Therapy Session with {patient_name}",
+                  font=("Segoe UI", 20, "bold")).pack(pady=(0, 20))
+
+        # Live Timer
+        self.timer_label = ttk.Label(self, text="Session Time: 00:00", font=("Segoe UI", 14))
+        self.timer_label.pack(pady=10)
+        self._update_timer()
+
+        # Mode Label (optional but useful)
+        self.mode_label = ttk.Label(self, text="Mode: idle", font=("Segoe UI", 14, "italic"), foreground="gray")
+        self.mode_label.pack(pady=5)
+        self._update_mode_label()
+
+        # "Press T to Talk" Notice
+        self.talk_label = ttk.Label(
+            self,
+            text="Hold [T] to Talk to MiRo",
+            font=("Segoe UI", 18, "bold"),
+            foreground="green"
+        )
+        self.talk_label.pack(pady=40)
+
+        # End Session Button
+        ttk.Button(self, text="End Therapy Session", command=self._end_session,
+                   style="Accent.TButton").pack(pady=30, ipady=8)
+
+    def _update_timer(self):
+        elapsed = int(time.time() - self.start_time)
+        minutes = elapsed // 60
+        seconds = elapsed % 60
+        self.timer_label.config(text=f"Session Time: {minutes:02d}:{seconds:02d}")
+        self.after(1000, self._update_timer)  # Update every second
+
+    def _update_mode_label(self):
+        if self.shared_state:
+            mode = self.shared_state.get("current_mode", "idle")
+            self.mode_label.config(text=f"Mode: {mode}")
+        self.after(500, self._update_mode_label)  # Refresh every half second
+
+    def _start_listening_mode(self, event=None):
+        if self.shared_state:
+            self.shared_state["current_mode"] = "listening"
+            print("[TherapySession] T pressed → listening ON")
+
+    def _stop_listening_mode(self, event=None):
+        if self.shared_state:
+            self.shared_state["current_mode"] = None
+            print("[TherapySession] T released → listening OFF")
+
+    def _end_session(self):
+        self.root.unbind_all("<KeyPress-t>")
+        self.root.unbind_all("<KeyRelease-t>")
+        if callable(self.end_session_callback):
+            self.end_session_callback()
 
 if __name__ == "__main__":
     patient_data = {
@@ -218,4 +339,5 @@ if __name__ == "__main__":
 
     root = tk.Tk()
     app = ReminiscenceTherapyGUI(root, patient_data)
+    root.protocol("WM_DELETE_WINDOW", app._on_app_exit)
     root.mainloop()

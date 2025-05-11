@@ -5,6 +5,8 @@ import random
 import subprocess
 import numpy as np
 import rospy
+import select
+import sys
 
 from std_msgs.msg import Float32MultiArray, UInt32MultiArray, UInt16MultiArray
 from sensor_msgs.msg import JointState
@@ -166,7 +168,11 @@ def blink_if_needed(pubs, last_blink_time, blink_interval=6.0):
         return now
     return last_blink_time
 
-# Entrypoint
+def get_pressed_key():
+    if select.select([sys.stdin], [], [], 0.0)[0]:
+        return sys.stdin.read(1)
+    return None
+
 def run_miro(shared_state):
     global happy_tone_played
     rospy.init_node("miro_emotion_modes")
@@ -189,17 +195,48 @@ def run_miro(shared_state):
     pubs["illum"].publish(LED_IDLE)
 
     current_mode = None
+    pending_mode = None
+    mode_start_time = 0
     wag_phase = 0.0
     last_blink_time = time.time()
     rate = rospy.Rate(50)
 
     try:
         while not rospy.is_shutdown():
-            new_mode = shared_state["current_mode"]
-            if new_mode != current_mode:
-                print(f"[MIRO] Switching mode: {current_mode} → {new_mode}")
+            requested_mode = shared_state["current_mode"]
+
+            # Attempt immediate switch if allowed
+            if requested_mode != current_mode:
+                now = time.time()
+                if current_mode in ["happy", "sad"] and (now - mode_start_time) < 3.0:
+                    pending_mode = requested_mode  # queue the mode change
+                else:
+                    print(f"[MIRO] Switching mode: {current_mode} → {requested_mode}")
+                    exit_mode(current_mode, pubs)
+                    current_mode = requested_mode
+                    mode_start_time = now
+                    pending_mode = None  # clear queue
+
+                    if current_mode == "happy":
+                        pubs["illum"].publish(LED_HAPPY)
+                    elif current_mode == "sad":
+                        pubs["illum"].publish(LED_SAD)
+                    elif current_mode == "speaking":
+                        pubs["illum"].publish(LED_SPEAKING)
+                    elif current_mode == "listening":
+                        pubs["illum"].publish(LED_LISTENING)
+                        listening_enter(pubs)
+                    else:
+                        pubs["illum"].publish(LED_IDLE)
+
+            # If a pending mode exists and delay has passed, switch now
+            elif pending_mode and (time.time() - mode_start_time) >= 3.0:
+                print(f"[MIRO] Switching to pending mode: {current_mode} → {pending_mode}")
                 exit_mode(current_mode, pubs)
-                current_mode = new_mode
+                current_mode = pending_mode
+                mode_start_time = time.time()
+                pending_mode = None
+
                 if current_mode == "happy":
                     pubs["illum"].publish(LED_HAPPY)
                 elif current_mode == "sad":
@@ -212,6 +249,7 @@ def run_miro(shared_state):
                 else:
                     pubs["illum"].publish(LED_IDLE)
 
+            # Behavior execution
             if current_mode == "happy":
                 wag_phase = happy_behavior_step(pubs, wag_phase)
             elif current_mode == "sad":
@@ -225,6 +263,7 @@ def run_miro(shared_state):
                 last_blink_time = blink_if_needed(pubs, last_blink_time)
 
             rate.sleep()
+
     except rospy.ROSInterruptException:
         pass
     finally:
@@ -232,3 +271,4 @@ def run_miro(shared_state):
         exit_mode(current_mode, pubs)
         pubs["illum"].publish(LED_IDLE)
         mute_mic()
+

@@ -5,7 +5,7 @@ import json
 
 openai_api_key = os.getenv("OPENAI_API_KEY")
 
-client = OpenAI(api_key="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")  # ← Replace with your key
+client = OpenAI(api_key="")  # ← Replace with your key
 
 app = FastAPI()
 

@@ -66,13 +66,19 @@ def create_app(shared_state):
         msg = payload.get("message", {})
         msg_type = msg.get("type")
 
+        print(shared_state)
+
         if msg_type == "transcript":
+
+
             text = msg.get("content", "")
             print(f"[TRANSCRIPT] User said: {text}")
             emotion = detect_emotion_from_text(text)
             print(f"[EMOTION DETECTED] {emotion}")
 
             # Update shared state
+            print("transcript:", emotion)
+
             if emotion in ["positive", "negative", "neutral"]:
                 shared_state["current_mode"] = {
                     "positive": "happy",
@@ -83,8 +89,14 @@ def create_app(shared_state):
         elif msg_type == "speech-update":
             status = msg.get("status", "")
             role = msg.get("role", "")
+
             if role == "assistant":
-                shared_state["agent_speaking"] = (status == "started")
+                if status == "started":
+                    shared_state["current_mode"] = "speaking"
+                    print("[MIRO SPEAKING] Assistant has started speaking.")
+                elif status == "stopped":
+                    shared_state["current_mode"] = "idle"
+                    print("[MIRO DONE] Assistant has finished speaking.")
 
         elif msg_type in ["conversation-update", "end-of-call-report"]:
             conversation = msg.get("conversation", [])
@@ -95,11 +107,19 @@ def create_app(shared_state):
                         print(f"[CONVERSATION-UPDATE] Last user message: {text}")
                         emotion = detect_emotion_from_text(text)
                         print(f"[EMOTION DETECTED] {emotion}")
+
+                        print({
+                            "positive": "happy",
+                            "negative": "sad",
+                            "neutral": "idle"
+                        }.get(emotion, "idle")) 
+
                         shared_state["current_mode"] = {
                             "positive": "happy",
                             "negative": "sad",
                             "neutral": "idle"
                         }.get(emotion, "idle")
+
                         last_processed_user_text = text
                     else:
                         print("[SKIPPED] Duplicate message — already processed.")
