@@ -160,15 +160,7 @@ class DailyCall(daily.EventHandler):
         while not self.__app_quit:
             buffer = self.__speaker_device.read_frames(CHUNK_SIZE)
 
-            print("hi")
             if len(buffer) > 0:
-                print("hello")
-                print("Saving to:", os.path.abspath("debug_audio.raw")) 
-                # 🔊 Save raw audio to file for debugging
-                with open("debug_audio.raw", "ab") as f:
-                    f.write(buffer)
-
-                # 🔊 Play the audio as normal
                 self.__output_audio_stream.write(buffer, CHUNK_SIZE)
 
     def send_app_message(self, message):

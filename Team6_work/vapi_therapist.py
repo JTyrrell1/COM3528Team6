@@ -14,11 +14,18 @@ class Vapi_TheRapist:
     def create_and_start_assistant(self):
         assistant_overrides = {
             "recordingEnabled": False,
+            "model": {
+                "provider": "openai",                # or whatever your assistant is configured with
+                "model": "gpt-4o",                    # or "gpt-3.5-turbo", etc.
+                "emotionRecognitionEnabled": True
+            },
             "variableValues": {
                 "image_description": self.image_description,
                 "patient_history_pdf": self.patient_history
             }
         }
+
+
 
         self.assistant.start(
             assistant_id='ba05d6d9-8f92-4065-b88b-ecef1ea39d69',

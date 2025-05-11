@@ -3,6 +3,9 @@ from tkinter import ttk, filedialog, messagebox
 from pathlib import Path
 from PIL import Image, ImageTk
 import fitz  # PyMuPDF
+import subprocess
+import time
+import psutil  # NEW IMPORT
 
 from Team6_work.image_description import ImageDescriber
 from Team6_work.vapi_therapist import Vapi_TheRapist
@@ -13,12 +16,10 @@ class ReminiscenceTherapyGUI(ttk.Frame):
         super().__init__(root, padding=20)
         self.root = root
 
-        # Load Azure theme
         self.root.tk.call("source", theme_path)
         self.root.tk.call("set_theme", "light")
-
-        # Configure window
         self.root.title("Reminiscence Therapy")
+
         try:
             self.root.state("zoomed")
         except tk.TclError:
@@ -30,17 +31,14 @@ class ReminiscenceTherapyGUI(ttk.Frame):
         self.root.minsize(800, 600)
         self.pack(fill="both", expand=True)
 
-        # Patient data
         self.patient_name = str(patient_info.get("name", "Unknown"))
         self.patient_age = str(patient_info.get("age", "Unknown"))
         self.history_file_path = patient_info.get("history_path")
         self.history_text = None
 
-        # Image data
         self.image_file_path = None
         self.image_type = tk.StringVar(value="personal")
 
-        # Build UI
         self._build_image_panel()
         self._build_info_panel()
 
@@ -48,7 +46,6 @@ class ReminiscenceTherapyGUI(ttk.Frame):
         self.columnconfigure(1, weight=2)
         self.rowconfigure(0, weight=1)
 
-        # Load initial history preview if available
         if self.history_file_path:
             self._preview_pdf(self.history_file_path)
             self.history_text = self._extract_text_from_pdf(self.history_file_path)
@@ -94,7 +91,8 @@ class ReminiscenceTherapyGUI(ttk.Frame):
         ttk.Radiobutton(img_type_frame, text="Personal", variable=self.image_type, value="personal").pack(anchor="w")
         ttk.Radiobutton(img_type_frame, text="Generic", variable=self.image_type, value="generic").pack(anchor="w")
 
-        ttk.Button(panel, text="Start Therapy", command=self._start_therapy_session).pack(fill="x", pady=10, ipady=10)
+        ttk.Button(panel, text="Start Server", command=self._start_server).pack(fill="x", pady=(10, 5), ipady=8)
+        ttk.Button(panel, text="Start Therapy", command=self._start_therapy_session).pack(fill="x", pady=(0, 10), ipady=10)
 
     def _upload_image(self):
         file_path = filedialog.askopenfilename(filetypes=[("Image Files", "*.png *.jpg *.jpeg")])
@@ -135,6 +133,46 @@ class ReminiscenceTherapyGUI(ttk.Frame):
         text = doc[0].get_text()
         doc.close()
         return text.strip()
+
+    def _show_url_dialog(self, url):
+        window = tk.Toplevel(self)
+        window.title("Webhook URL")
+        window.geometry("500x120")
+        ttk.Label(window, text="Webhook is now public at:").pack(pady=(10, 0))
+
+        entry = ttk.Entry(window, width=60)
+        entry.insert(0, url)
+        entry.pack(pady=5)
+        entry.select_range(0, 'end')
+
+        def copy_to_clipboard():
+            self.root.clipboard_clear()
+            self.root.clipboard_append(url)
+            messagebox.showinfo("Copied", f"Copied to clipboard:\n{url}")
+
+        ttk.Button(window, text="Copy to Clipboard", command=copy_to_clipboard).pack(pady=5)
+
+    def _free_port(self, port=8000):
+        for proc in psutil.process_iter(['pid', 'name']):
+            try:
+                connections = proc.connections(kind='inet')
+                for conn in connections:
+                    if conn.laddr.port == port:
+                        proc.kill()
+                        print(f"Killed process {proc.pid} using port {port}")
+            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                continue
+
+
+    def _start_server(self):
+        try:
+            self._free_port(8000)
+            subprocess.Popen(["gnome-terminal", "--", "bash", "-c","uvicorn Team6_work.main:app --host 0.0.0.0 --port 8000; exec bash"])
+            subprocess.Popen(["bash", "-c", "cd ~ && ./ngrok http --domain=eminent-sought-beetle.ngrok-free.app 8000"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            time.sleep(2)
+            self._show_url_dialog("https://eminent-sought-beetle.ngrok-free.app")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to start server:\n{e}")
 
     def _start_therapy_session(self):
         image_description = self.image_description_widget.get("1.0", "end").strip()
