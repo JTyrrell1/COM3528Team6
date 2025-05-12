@@ -92,11 +92,13 @@ def create_app(shared_state):
 
             if role == "assistant":
                 if status == "started":
-                    shared_state["current_mode"] = "speaking"
-                    print("[MIRO SPEAKING] Assistant has started speaking.")
+                    if shared_state["current_mode"] != "listening":
+                        shared_state["current_mode"] = "speaking"
+                        print("[MIRO SPEAKING] Assistant has started speaking.")
                 elif status == "stopped":
-                    shared_state["current_mode"] = "idle"
-                    print("[MIRO DONE] Assistant has finished speaking.")
+                    if shared_state["current_mode"] != "listening":
+                        shared_state["current_mode"] = "idle"
+                        print("[MIRO DONE] Assistant has finished speaking.")
 
         elif msg_type in ["conversation-update", "end-of-call-report"]:
             conversation = msg.get("conversation", [])
@@ -114,11 +116,12 @@ def create_app(shared_state):
                             "neutral": "idle"
                         }.get(emotion, "idle")) 
 
-                        shared_state["current_mode"] = {
-                            "positive": "happy",
-                            "negative": "sad",
-                            "neutral": "idle"
-                        }.get(emotion, "idle")
+                        if shared_state["current_mode"] != "listening":
+                            shared_state["current_mode"] = {
+                                "positive": "happy",
+                                "negative": "sad",
+                                "neutral": "idle"
+                            }.get(emotion, "idle")
 
                         last_processed_user_text = text
                     else:

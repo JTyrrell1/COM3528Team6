@@ -96,10 +96,11 @@ class ReminiscenceTherapyGUI(ttk.Frame):
         self.preview_image_label = ttk.Label(self.history_preview_frame, text="No preview available", anchor="center", justify="center")
         self.preview_image_label.pack(expand=True, fill="both")
 
-        img_type_frame = ttk.LabelFrame(panel, text="Image Type", padding=12)
-        img_type_frame.pack(fill="x", pady=10)
-        ttk.Radiobutton(img_type_frame, text="Personal", variable=self.image_type, value="personal").pack(anchor="w")
-        ttk.Radiobutton(img_type_frame, text="Generic", variable=self.image_type, value="generic").pack(anchor="w")
+        #img_type_frame = ttk.LabelFrame(panel, text="Image Type", padding=12)
+        #img_type_frame.pack(fill="x", pady=10)
+        #ttk.Label(img_type_frame, text=f"IMPORTANT: START SERVER FIRST AND THEN START THERAPY").pack(anchor="w")
+        #ttk.Radiobutton(img_type_frame, text="Personal", variable=self.image_type, value="personal").pack(anchor="w")
+        #ttk.Radiobutton(img_type_frame, text="Generic", variable=self.image_type, value="generic").pack(anchor="w")
 
         ttk.Button(panel, text="Start Server", command=self._start_server).pack(fill="x", pady=(10, 5), ipady=8)
         ttk.Button(panel, text="Start Therapy", command=self._start_therapy_session).pack(fill="x", pady=(0, 10), ipady=10)
@@ -216,7 +217,7 @@ class ReminiscenceTherapyGUI(ttk.Frame):
     def _start_therapy_session(self):
         image_description = self.image_description_widget.get("1.0", "end").strip()
 
-        if image_description and self.history_text:
+        if image_description and self.history_text and self.api_proc and self.api_proc.is_alive():
             self.vapi_proc = Process(
                 target=run_vapi_in_process,
                 args=(image_description, self.history_text),
@@ -225,7 +226,7 @@ class ReminiscenceTherapyGUI(ttk.Frame):
             self.vapi_proc.start()
             self._show_therapy_view()
         else:
-            messagebox.showwarning("Missing Information", "Please upload both an image and a history PDF before starting.")
+            messagebox.showwarning("Missing Information", "Before starting therapy: please ensure you upload an image and history PDF and start the server.")
 
     def _end_all_processes(self):
         print("[MainGUI] Cleaning up processes...")
@@ -271,9 +272,7 @@ class TherapySessionFrame(ttk.Frame):
         self.end_session_callback = end_session_callback
         self.start_time = time.time()
 
-        # Bind key events globally (safer than per-widget)
-        self.root.bind_all("<KeyPress-t>", self._start_listening_mode)
-        self.root.bind_all("<KeyRelease-t>", self._stop_listening_mode)
+        self.root.bind_all("<KeyPress-t>", self._toggle_listening_mode)
 
         # Title
         ttk.Label(self, text=f"Therapy Session with {patient_name}",
@@ -324,6 +323,15 @@ class TherapySessionFrame(ttk.Frame):
         if self.shared_state:
             self.shared_state["current_mode"] = None
             print("[TherapySession] T released → listening OFF")
+
+    def _toggle_listening_mode(self, event=None):
+        if self.shared_state:
+            if self.shared_state.get("current_mode") != "listening":
+                self.shared_state["current_mode"] = "listening"
+                print("[TherapySession] T pressed → listening ON")
+            else:
+                self.shared_state["current_mode"] = "idle"
+                print("[TherapySession] T pressed again → listening OFF")
 
     def _end_session(self):
         self.root.unbind_all("<KeyPress-t>")
